@@ -160,3 +160,4 @@ reset(); draw();
 </script>
 </body>
 </html>
+change moi la couleur du serpent à chaque fois qu'il touche la boule 
