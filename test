@@ -1,2 +1,162 @@
-cd /Users/sari/moi/snake && git push -u origin main
-/Users/sari/moi/snake/index.html
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no">
+<title>Snake</title>
+<style>
+  :root { --bg:#0f172a; --panel:#1e293b; --snake:#22c55e; --head:#4ade80; --food:#f43f5e; --text:#e2e8f0; --muted:#94a3b8; }
+  * { box-sizing:border-box; }
+  body { margin:0; min-height:100vh; display:flex; flex-direction:column; align-items:center; justify-content:center;
+         background:var(--bg); color:var(--text); font-family:system-ui,-apple-system,sans-serif; padding:16px; touch-action:none; }
+  h1 { margin:0 0 8px; font-size:2rem; letter-spacing:2px; }
+  .scores { display:flex; gap:24px; margin-bottom:12px; color:var(--muted); }
+  .scores b { color:var(--text); }
+  .wrap { position:relative; width:min(90vw,420px); aspect-ratio:1; }
+  canvas { width:100%; height:100%; background:var(--panel); border-radius:12px; display:block; }
+  .overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center;
+             background:rgba(15,23,42,.8); border-radius:12px; text-align:center; gap:12px; }
+  .overlay.hidden { display:none; }
+  button { background:var(--snake); color:#052e16; border:0; padding:12px 28px; font-size:1.1rem; font-weight:700;
+           border-radius:999px; cursor:pointer; }
+  button:hover { filter:brightness(1.1); }
+  .hint { color:var(--muted); font-size:.9rem; margin-top:12px; text-align:center; }
+</style>
+</head>
+<body>
+  <h1>🐍 SNAKE</h1>
+  <div class="scores">
+    <span>Score : <b id="score">0</b></span>
+    <span>Record : <b id="best">0</b></span>
+  </div>
+  <div class="wrap">
+    <canvas id="game" width="400" height="400"></canvas>
+    <div class="overlay" id="overlay">
+      <div id="msg" style="font-size:1.3rem">Prêt ?</div>
+      <button id="start">Jouer</button>
+    </div>
+  </div>
+  <p class="hint">Flèches / ZQSD pour bouger · Espace pour pause · Swipe sur mobile</p>
+
+<script>
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
+const GRID = 20, CELL = canvas.width / GRID;
+const scoreEl = document.getElementById('score');
+const bestEl = document.getElementById('best');
+const overlay = document.getElementById('overlay');
+const msg = document.getElementById('msg');
+
+let snake, dir, nextDir, food, score, timer, speed, paused = false, running = false;
+let best = 0;
+try { best = +localStorage.getItem('snake-best') || 0; } catch {}
+bestEl.textContent = best;
+
+function reset() {
+  snake = [{x:10,y:10},{x:9,y:10},{x:8,y:10}];
+  dir = {x:1,y:0}; nextDir = dir;
+  score = 0; speed = 130;
+  scoreEl.textContent = 0;
+  placeFood();
+}
+
+function placeFood() {
+  do {
+    food = { x: Math.floor(Math.random()*GRID), y: Math.floor(Math.random()*GRID) };
+  } while (snake.some(s => s.x === food.x && s.y === food.y));
+}
+
+function tick() {
+  dir = nextDir;
+  const head = { x: snake[0].x + dir.x, y: snake[0].y + dir.y };
+  if (head.x < 0 || head.y < 0 || head.x >= GRID || head.y >= GRID ||
+      snake.some(s => s.x === head.x && s.y === head.y)) return gameOver();
+
+  snake.unshift(head);
+  if (head.x === food.x && head.y === food.y) {
+    score++;
+    scoreEl.textContent = score;
+    placeFood();
+    if (speed > 60) { speed -= 3; restartTimer(); }
+  } else {
+    snake.pop();
+  }
+  draw();
+}
+
+function draw() {
+  ctx.clearRect(0, 0, canvas.width, canvas.height);
+  // nourriture
+  ctx.fillStyle = '#f43f5e';
+  ctx.beginPath();
+  ctx.arc(food.x*CELL + CELL/2, food.y*CELL + CELL/2, CELL/2.4, 0, Math.PI*2);
+  ctx.fill();
+  // serpent
+  snake.forEach((s, i) => {
+    ctx.fillStyle = i === 0 ? '#4ade80' : '#22c55e';
+    ctx.beginPath();
+    ctx.roundRect(s.x*CELL + 1, s.y*CELL + 1, CELL - 2, CELL - 2, 5);
+    ctx.fill();
+  });
+}
+
+function restartTimer() { clearInterval(timer); timer = setInterval(tick, speed); }
+
+function start() {
+  reset(); draw();
+  overlay.classList.add('hidden');
+  running = true; paused = false;
+  restartTimer();
+}
+
+function gameOver() {
+  clearInterval(timer); running = false;
+  if (score > best) {
+    best = score; bestEl.textContent = best;
+    try { localStorage.setItem('snake-best', best); } catch {}
+    msg.textContent = `Nouveau record : ${score} ! 🎉`;
+  } else {
+    msg.textContent = `Perdu ! Score : ${score}`;
+  }
+  document.getElementById('start').textContent = 'Rejouer';
+  overlay.classList.remove('hidden');
+}
+
+function togglePause() {
+  if (!running) return;
+  paused = !paused;
+  if (paused) { clearInterval(timer); msg.textContent = 'Pause'; document.getElementById('start').textContent = 'Reprendre'; overlay.classList.remove('hidden'); }
+  else { overlay.classList.add('hidden'); restartTimer(); }
+}
+
+function turn(x, y) {
+  if (x === -dir.x && y === -dir.y) return; // pas de demi-tour
+  nextDir = {x, y};
+}
+
+document.getElementById('start').onclick = () => (running && paused) ? togglePause() : start();
+
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (['arrowup','z','w'].includes(k)) turn(0,-1);
+  else if (['arrowdown','s'].includes(k)) turn(0,1);
+  else if (['arrowleft','q','a'].includes(k)) turn(-1,0);
+  else if (['arrowright','d'].includes(k)) turn(1,0);
+  else if (k === ' ') { running ? togglePause() : start(); }
+  else return;
+  e.preventDefault();
+});
+
+// swipe mobile
+let tx, ty;
+document.addEventListener('touchstart', e => { tx = e.touches[0].clientX; ty = e.touches[0].clientY; }, {passive:true});
+document.addEventListener('touchend', e => {
+  const dx = e.changedTouches[0].clientX - tx, dy = e.changedTouches[0].clientY - ty;
+  if (Math.max(Math.abs(dx), Math.abs(dy)) < 20) return;
+  Math.abs(dx) > Math.abs(dy) ? turn(Math.sign(dx), 0) : turn(0, Math.sign(dy));
+});
+
+reset(); draw();
+</script>
+</body>
+</html>
